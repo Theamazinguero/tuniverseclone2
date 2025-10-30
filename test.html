@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Tuniverse Web Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: system-ui, Arial, sans-serif; margin: 24px; }
+      input, button { font-size: 16px; }
+      pre { white-space: pre-wrap; background: #f6f6f6; padding: 12px; border-radius: 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>Tuniverse Web Test</h1>
+
+    <label>
+      User ID:
+      <input id="userId" placeholder="demo_user" />
+    </label>
+    <button id="go">Generate Passport</button>
+
+    <h3>Result</h3>
+    <pre id="out">(waiting...)</pre>
+
+    <script>
+      // Change this if you run your backend on a phone/LAN:
+      // e.g. const BASE = "http://192.168.1.50:8000";
+      const BASE = "http://127.0.0.1:8000";
+
+      document.getElementById("go").onclick = async () => {
+        const userId = document.getElementById("userId").value || "demo_user";
+        const out = document.getElementById("out");
+        out.textContent = "Loading...";
+        try {
+          const res = await fetch(`${BASE}/demo_passport/${encodeURIComponent(userId)}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+
+          const cc = data.country_counts || {};
+          const rp = data.region_percentages || {};
+
+          let text = "";
+          text += `User: ${data.user_id}\n`;
+          text += `Total artists: ${data.total_artists}\n\n`;
+          text += "Countries:\n";
+          Object.keys(cc).forEach(k => (text += `• ${k}: ${cc[k]}\n`));
+          text += "\nRegions:\n";
+          Object.keys(rp).forEach(k => (text += `• ${k}: ${Math.round(rp[k] * 100)}%\n`));
+          if (data.share_link) text += `\nShare: ${data.share_link}\n`;
+
+          out.textContent = text.trim();
+        } catch (e) {
+          out.textContent = `Error: ${e.message || e}`;
+        }
+      };
+    </script>
+  </body>
+</html>
