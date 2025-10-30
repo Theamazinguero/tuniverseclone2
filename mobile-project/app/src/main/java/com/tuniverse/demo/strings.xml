@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Tuniverse Demo</string>
+    <string name="hint_user_id">Enter user id (e.g., demo_user)</string>
+    <string name="btn_generate">Generate Passport</string>
+    <string name="result_header">Result:</string>
+    <string name="result_waiting">(waiting...)</string>
+</resources>

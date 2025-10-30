@@ -1,0 +1,6 @@
+<resources>
+    <color name="md_sys_color_background">#FFFFFFFF</color>
+    <color name="md_sys_color_on_background">#FF000000</color>
+    <color name="md_sys_color_primary">#FF6750A4</color>
+    <color name="md_sys_color_on_primary">#FFFFFFFF</color>
+</resources>

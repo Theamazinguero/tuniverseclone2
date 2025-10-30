@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow cleartext HTTP for local testing (emulator & LAN) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Android emulator host alias -->
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <!-- Localhost for special cases -->
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <!-- Example LAN IP; replace with your own if demoing on real phone -->
+        <domain includeSubdomains="true">192.168.1.0</domain>
+        <domain includeSubdomains="true">192.168.1.1</domain>
+        <domain includeSubdomains="true">192.168.1.50</domain>
+    </domain-config>
+
+    <!-- Optional: allow any cleartext during class demo -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
