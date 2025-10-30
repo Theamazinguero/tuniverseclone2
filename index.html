@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Tuniverse — Web UI Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Tuniverse</h1>
+    <p class="sub">Turn your listening into a world map.</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>1) Connect Spotify</h2>
+      <p>Click login to authorize Tuniverse with your Spotify account.</p>
+      <div class="row">
+        <button id="btnLogin">Login with Spotify</button>
+        <button id="btnMe" disabled>Load My Profile</button>
+      </div>
+      <div class="row">
+        <label>Access Token (paste if you have it):</label>
+        <input id="token" placeholder="Paste access_token here after login (dev/demo)" />
+      </div>
+      <pre id="meOut" class="out"></pre>
+    </section>
+
+    <section class="card">
+      <h2>2) My Playlists (preview)</h2>
+      <div class="row">
+        <label>Limit</label>
+        <input id="limit" type="number" value="5" min="1" max="50" />
+        <button id="btnPlaylists" disabled>Fetch Playlists</button>
+      </div>
+      <ul id="playlists"></ul>
+    </section>
+
+    <section class="card">
+      <h2>3) Music Passport (demo)</h2>
+      <div class="row">
+        <label>User ID (any string for demo)</label>
+        <input id="userId" value="demo_user" />
+        <button id="btnPassport">Generate Passport</button>
+      </div>
+      <pre id="passOut" class="out"></pre>
+    </section>
+  </main>
+
+  <footer>
+    <small>Backend: <span id="baseShow"></span></small>
+  </footer>
+
+  <script src="./app.js"></script>
+</body>
+</html>
