@@ -16,11 +16,15 @@ const userIdEl = document.getElementById("userId");
 const btnPassport = document.getElementById("btnPassport");
 const passOut = document.getElementById("passOut");
 
-// Enable buttons if a token is present
+// NEW: token-based passport button
+const btnPassportFromToken = document.getElementById("btnPassportFromToken");
+
+// ------- Enable/disable buttons based on token -------
 const syncButtons = () => {
   const hasToken = !!tokenEl.value.trim();
   btnMe.disabled = !hasToken;
   btnPlaylists.disabled = !hasToken;
+  if (btnPassportFromToken) btnPassportFromToken.disabled = !hasToken;
 };
 tokenEl.addEventListener("input", syncButtons);
 syncButtons();
@@ -59,28 +63,53 @@ btnPlaylists.onclick = async () => {
     const r = await fetch(`${BASE}/spotify/playlists?access_token=${encodeURIComponent(at)}&limit=${limit}`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
-    const items = (data.items || []).map(p => `<li><strong>${p.name}</strong> <small>(${p.tracks?.total ?? "?"} tracks)</small></li>`).join("");
+    const items = (data.items || [])
+      .map(p => `<li><strong>${p.name}</strong> <small>(${p.tracks?.total ?? "?"} tracks)</small></li>`)
+      .join("");
     playlistsEl.innerHTML = items || "<li>No playlists</li>";
   } catch (e) {
     playlistsEl.innerHTML = `<li>Error: ${e.message || e}</li>`;
   }
 };
 
+// ------- Music Passport (demo endpoint) -------
 btnPassport.onclick = async () => {
-  passOut.textContent = "Generating...";
+  passOut.textContent = "Generating (demo endpoint)...";
   try {
     const uid = userIdEl.value.trim() || "demo_user";
     const r = await fetch(`${BASE}/demo_passport/${encodeURIComponent(uid)}`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
-    const cc = data.country_counts || {};
-    const rp = data.region_percentages || {};
-    let out = `User: ${data.user_id}\nTotal Artists: ${data.total_artists}\n\nCountries:\n`;
-    Object.keys(cc).forEach(k => out += `• ${k}: ${cc[k]}\n`);
-    out += `\nRegions:\n`;
-    Object.keys(rp).forEach(k => out += `• ${k}: ${Math.round(rp[k]*100)}%\n`);
-    passOut.textContent = out;
+    renderPassport(data);
   } catch (e) {
     passOut.textContent = `Error: ${e.message || e}`;
   }
 };
+
+// ------- Music Passport (from Spotify token) -------
+if (btnPassportFromToken) {
+  btnPassportFromToken.onclick = async () => {
+    passOut.textContent = "Generating from Spotify (this can take ~10–20s due to lookups)...";
+    try {
+      const at = tokenEl.value.trim();
+      if (!at) throw new Error("Paste your access_token first (use Login with Spotify).");
+      const r = await fetch(`${BASE}/passport/from_token?access_token=${encodeURIComponent(at)}&limit=12`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      renderPassport(data);
+    } catch (e) {
+      passOut.textContent = `Error: ${e.message || e}`;
+    }
+  };
+}
+
+// ------- Helper: render passport summary -------
+function renderPassport(data) {
+  const cc = data.country_counts || {};
+  const rp = data.region_percentages || {};
+  let out = `User: ${data.user_id ?? "N/A"}\nTotal Artists: ${data.total_artists ?? 0}\n\nCountries:\n`;
+  Object.keys(cc).forEach(k => (out += `• ${k}: ${cc[k]}\n`));
+  out += `\nRegions:\n`;
+  Object.keys(rp).forEach(k => (out += `• ${k}: ${Math.round(rp[k] * 100)}%\n`));
+  passOut.textContent = out;
+}
