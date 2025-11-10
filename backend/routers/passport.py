@@ -149,3 +149,4 @@ def passport_from_recent(
         "country_counts": country_counts,
         "region_percentages": rollup_regions(country_counts),
     }
+
