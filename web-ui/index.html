@@ -5,6 +5,23 @@
   <title>Tuniverse — Web UI Demo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="./styles.css" />
+  <style>
+    /* minimal inline style in case styles.css is missing */
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; }
+    body { margin: 0; background: #0f1220; color: #e9ecf1; }
+    header { padding: 24px 16px; text-align: center; background: #151936; border-bottom: 1px solid #22264a; }
+    header h1 { margin: 0 0 6px; font-size: 28px; }
+    .sub { margin: 0; color: #9aa3b2; }
+    main { max-width: 880px; margin: 24px auto; padding: 0 16px; display: grid; gap: 16px; }
+    .card { background: #151936; border: 1px solid #22264a; border-radius: 10px; padding: 16px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    button { background: #4c77ff; color: white; border: 0; padding: 10px 14px; border-radius: 8px; cursor: pointer; }
+    button[disabled] { opacity: .5; cursor: not-allowed; }
+    input { background: #0f1220; color: #e9ecf1; border: 1px solid #2a2f55; padding: 8px 10px; border-radius: 8px; min-width: 260px; }
+    ul { margin: 8px 0 0; padding-left: 18px; }
+    .out { white-space: pre-wrap; background: #0f1220; padding: 10px; border-radius: 8px; border: 1px solid #2a2f55; }
+    footer { text-align: center; color: #9aa3b2; padding: 20px 0 30px; }
+  </style>
 </head>
 <body>
   <header>
@@ -13,6 +30,7 @@
   </header>
 
   <main>
+    <!-- 1) Auth & Profile -->
     <section class="card">
       <h2>1) Connect Spotify</h2>
       <p>Click login to authorize Tuniverse with your Spotify account.</p>
@@ -27,6 +45,7 @@
       <pre id="meOut" class="out"></pre>
     </section>
 
+    <!-- 2) Playlists -->
     <section class="card">
       <h2>2) My Playlists (preview)</h2>
       <div class="row">
@@ -37,12 +56,11 @@
       <ul id="playlists"></ul>
     </section>
 
+    <!-- 3) Music Passport (LIVE) -->
     <section class="card">
-      <h2>3) Music Passport (demo)</h2>
+      <h2>3) Music Passport</h2>
       <div class="row">
-        <label>User ID (any string for demo)</label>
-        <input id="userId" value="demo_user" />
-        <button id="btnPassport">Generate Passport</button>
+        <button id="btnPassportFromToken" disabled>Passport from My Spotify (token)</button>
       </div>
       <pre id="passOut" class="out"></pre>
     </section>
@@ -52,6 +70,7 @@
     <small>Backend: <span id="baseShow"></span></small>
   </footer>
 
-  <script src="./app.js"></script>
+  <script src="./app.js?v=2"></script>
 </body>
 </html>
+
