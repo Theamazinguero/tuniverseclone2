@@ -2,9 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Tuniverse — Demo</title>
+  <title>Tuniverse — Web UI Demo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="./styles.css" />
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body { margin: 0; background: #0f172a; color: #e2e8f0; }
+    header { padding: 24px; text-align: center; border-bottom: 1px solid #1f2937; }
+    h1 { margin: 0; font-size: 28px; }
+    .sub { margin: 6px 0 0; color: #9ca3af; }
+    main { max-width: 900px; margin: 24px auto; padding: 0 16px 48px; display: grid; gap: 16px; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 16px; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+    button { background: #2563eb; color: white; border: none; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+    button[disabled] { opacity: 0.5; cursor: not-allowed; }
+    input { background: #0b1220; color: #e2e8f0; border: 1px solid #1f2937; border-radius: 8px; padding: 8px 10px; min-width: 260px; }
+    pre.out { white-space: pre-wrap; background: #0b1220; border: 1px solid #1f2937; border-radius: 8px; padding: 12px; min-height: 64px; }
+    ul { padding-left: 20px; }
+    footer { text-align: center; padding: 16px; color: #9ca3af; }
+    .ok { color: #10b981; font-weight: 600; }
+    .err { color: #ef4444; font-weight: 600; }
+    small code { background: #0b1220; padding: 2px 6px; border-radius: 6px; border: 1px solid #1f2937; }
+  </style>
 </head>
 <body>
   <header>
@@ -14,44 +32,56 @@
 
   <main>
     <section class="card">
-      <h2>Connect Spotify</h2>
-      <p id="authStatus">Checking sign-in…</p>
+      <h2>1) Connect Spotify</h2>
+      <div class="row">
+        <span id="whoami" class="ok" hidden>Signed in</span>
+      </div>
       <div class="row">
         <button id="btnLogin">Login with Spotify</button>
-        <button id="btnLogout" class="secondary">Logout</button>
+        <button id="btnLogout">Logout</button>
       </div>
+      <div class="row">
+        <label>Access Token (debug, auto-filled after login)</label>
+        <input id="token" placeholder="Auto set after login" />
+      </div>
+      <small>Backend: <code id="baseShow"></code></small>
     </section>
 
     <section class="card">
-      <h2>My Profile</h2>
-      <pre id="meOut" class="out">Sign in to load…</pre>
+      <h2>2) My Profile</h2>
+      <div class="row">
+        <button id="btnMe" disabled>Load My Profile</button>
+      </div>
+      <pre id="meOut" class="out"></pre>
     </section>
 
     <section class="card">
-      <h2>My Playlists</h2>
+      <h2>3) My Playlists</h2>
       <div class="row">
         <label>Limit</label>
         <input id="limit" type="number" value="5" min="1" max="50" />
-        <button id="btnPlaylists">Fetch</button>
+        <button id="btnPlaylists" disabled>Fetch</button>
       </div>
       <ul id="playlists"></ul>
     </section>
 
     <section class="card">
-      <h2>My Music Passport</h2>
+      <h2>4) My Music Passport</h2>
       <div class="row">
-        <button id="btnPassport">Generate from Top Artists</button>
-        <button id="btnRecent" class="secondary">Use Recently Played (fallback)</button>
+        <button id="btnPassportTop" disabled>Generate from Top Artists</button>
+        <button id="btnPassportRecent" disabled>Use Recently Played (fallback)</button>
       </div>
       <pre id="passOut" class="out"></pre>
     </section>
   </main>
 
   <footer>
-    <small>Backend: <span id="baseShow"></span></small>
+    <small>Tip: after login, this page auto-fills your token and enables buttons.</small>
   </footer>
 
-  <script src="./app.js?v=7"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
+
+
 
