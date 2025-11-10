@@ -79,7 +79,7 @@ if (btnPassportFromToken) {
       if (!at) throw new Error("Paste your access_token first (from /auth/login).");
 
       // limit is small for demo; increase if you want, but MusicBrainz lookups are rate-limited
-      const r = await fetch(`${BASE}/passport/from_token?access_token=${encodeURIComponent(at)}&limit=8`);
+      const r = await fetch(`${BASE}/passport/from_token?access_token=${encodeURIComponent(at)}&limit=10`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
 
@@ -95,4 +95,5 @@ if (btnPassportFromToken) {
     }
   };
 }
+
 
