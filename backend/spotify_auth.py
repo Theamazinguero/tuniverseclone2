@@ -23,11 +23,12 @@ Usage:
 # backend/spotify_auth.py
 """
 Spotify OAuth + simple Spotify passthrough endpoints used by the web UI.
-- /auth/login -> redirect to Spotify
-- /auth/callback -> exchange code, redirect to FRONTEND_URL with tokens in hash
-- /spotify/me -> return profile using access token
-- /spotify/playlists -> return playlists using access token
-- /spotify/top-artists -> return user's top artists (used for debug)
+- GET  /auth/login         -> redirect to Spotify (forces scope re-consent)
+- GET  /auth/callback      -> exchange code, redirect to FRONTEND_URL with tokens in hash
+- GET  /spotify/me         -> profile via Spotify API (requires access_token)
+- GET  /spotify/playlists  -> playlists via Spotify API (requires access_token)
+- GET  /spotify/top-artists-> top artists via Spotify API (requires access_token)
+- GET  /spotify/check-top  -> debug helper
 """
 
 from fastapi import APIRouter, HTTPException, Query
@@ -48,7 +49,7 @@ SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "")
 SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8000/auth/callback")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://127.0.0.1:5500/")
 
-# Make sure these scopes include user-top-read (for passport) and playlist-read-private (for UI)
+# Scopes needed for profile, playlists, top artists, and recently played:
 SCOPES = "user-read-email playlist-read-private user-top-read user-read-recently-played"
 
 TOKEN_URL = "https://accounts.spotify.com/api/token"
@@ -60,12 +61,11 @@ def _basic_auth_header() -> str:
     return "Basic " + base64.b64encode(raw).decode()
 
 
-# ---------- OAuth ----------
-
 @router.get("/auth/login", summary="Redirect to Spotify login", tags=["Auth"])
 def spotify_login(state: Optional[str] = None):
     if not SPOTIFY_CLIENT_ID or not SPOTIFY_REDIRECT_URI:
         raise HTTPException(500, "Spotify env vars not configured")
+    # Pass the frontend URL via state; force re-consent so scopes are guaranteed
     st = urllib.parse.quote_plus(FRONTEND_URL if not state else state)
     params = {
         "client_id": SPOTIFY_CLIENT_ID,
@@ -73,6 +73,7 @@ def spotify_login(state: Optional[str] = None):
         "redirect_uri": SPOTIFY_REDIRECT_URI,
         "scope": SCOPES,
         "state": st,
+        "show_dialog": "true",  # force re-consent so we always get needed scopes
     }
     return RedirectResponse(AUTHORIZE_URL + "?" + urllib.parse.urlencode(params))
 
@@ -115,7 +116,7 @@ def spotify_callback(
     return RedirectResponse(f"{target}#{fragment}")
 
 
-# ---------- Simple Spotify passthrough endpoints used by the UI ----------
+# --------- Passthrough endpoints used by the UI ---------
 
 @router.get("/spotify/me", summary="Return Spotify profile (requires access_token)", tags=["Spotify"])
 def get_me(access_token: str = Query(..., description="Spotify access token")):
@@ -147,3 +148,12 @@ def get_top_artists(
     if isinstance(data, dict) and "error" in data:
         raise HTTPException(400, f"/me/top/artists failed: {data}")
     return data
+
+
+# Debug helper to validate top artists quickly
+@router.get("/spotify/check-top")
+def check_top(access_token: str, limit: int = 10):
+    data = spotify_get("/me/top/artists", access_token, params={"limit": limit})
+    items = data.get("items", []) if isinstance(data, dict) else []
+    names = [a.get("name") for a in items if a]
+    return {"count": len(names), "names": names}
