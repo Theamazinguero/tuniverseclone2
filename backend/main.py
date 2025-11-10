@@ -46,7 +46,7 @@ app.include_router(playlists.router, prefix="/playlists", tags=["Playlists"])
 app.include_router(artists.router, prefix="/artists", tags=["Artists"])
 app.include_router(passport.router, prefix="/passport", tags=["Music Passport"])
 app.include_router(compare.router, prefix="/compare", tags=["Comparisons"])
-app.include_router(demo_passport.router, tags=["Demo"])
+# app.include_router(demo_passport.router, tags=["Demo"]) 
 app.include_router(spotify_auth.router)  # <-- add this (exposes /auth/login, /auth/callback, etc.)
 
 @app.get("/")
