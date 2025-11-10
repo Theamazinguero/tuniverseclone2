@@ -22,7 +22,12 @@ Usage:
 
 # backend/spotify_auth.py
 """
-Spotify OAuth → redirect back to web UI with tokens in URL hash.
+Spotify OAuth + simple Spotify passthrough endpoints used by the web UI.
+- /auth/login -> redirect to Spotify
+- /auth/callback -> exchange code, redirect to FRONTEND_URL with tokens in hash
+- /spotify/me -> return profile using access token
+- /spotify/playlists -> return playlists using access token
+- /spotify/top-artists -> return user's top artists (used for debug)
 """
 
 from fastapi import APIRouter, HTTPException, Query
@@ -43,7 +48,9 @@ SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "")
 SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8000/auth/callback")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://127.0.0.1:5500/")
 
+# Make sure these scopes include user-top-read (for passport) and playlist-read-private (for UI)
 SCOPES = "user-read-email playlist-read-private user-top-read user-read-recently-played"
+
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 AUTHORIZE_URL = "https://accounts.spotify.com/authorize"
 
@@ -53,11 +60,12 @@ def _basic_auth_header() -> str:
     return "Basic " + base64.b64encode(raw).decode()
 
 
-@router.get("/auth/login", summary="Redirect to Spotify login")
+# ---------- OAuth ----------
+
+@router.get("/auth/login", summary="Redirect to Spotify login", tags=["Auth"])
 def spotify_login(state: Optional[str] = None):
     if not SPOTIFY_CLIENT_ID or not SPOTIFY_REDIRECT_URI:
         raise HTTPException(500, "Spotify env vars not configured")
-    # Use state to carry where to return on success
     st = urllib.parse.quote_plus(FRONTEND_URL if not state else state)
     params = {
         "client_id": SPOTIFY_CLIENT_ID,
@@ -69,7 +77,7 @@ def spotify_login(state: Optional[str] = None):
     return RedirectResponse(AUTHORIZE_URL + "?" + urllib.parse.urlencode(params))
 
 
-@router.get("/auth/callback", summary="Spotify → callback, exchange code, redirect to web UI with tokens")
+@router.get("/auth/callback", summary="Spotify callback → exchange code → redirect to web UI with tokens", tags=["Auth"])
 def spotify_callback(
     code: Optional[str] = Query(None),
     error: Optional[str] = Query(None),
@@ -96,7 +104,6 @@ def spotify_callback(
         raise HTTPException(400, f"/me failed: {me}")
 
     app_token = create_access_token(subject=me.get("id", "unknown"))
-
     target = urllib.parse.unquote_plus(state) if state else FRONTEND_URL
     fragment = urllib.parse.urlencode({
         "access_token": access_token,
@@ -106,3 +113,37 @@ def spotify_callback(
         "spotify_id": me.get("id") or ""
     })
     return RedirectResponse(f"{target}#{fragment}")
+
+
+# ---------- Simple Spotify passthrough endpoints used by the UI ----------
+
+@router.get("/spotify/me", summary="Return Spotify profile (requires access_token)", tags=["Spotify"])
+def get_me(access_token: str = Query(..., description="Spotify access token")):
+    data = spotify_get("/me", access_token)
+    if isinstance(data, dict) and "error" in data:
+        raise HTTPException(400, f"/me failed: {data}")
+    return data
+
+
+@router.get("/spotify/playlists", summary="Return Spotify playlists (requires access_token)", tags=["Spotify"])
+def get_playlists(
+    access_token: str = Query(..., description="Spotify access token"),
+    limit: int = 10,
+    offset: int = 0,
+):
+    data = spotify_get("/me/playlists", access_token, params={"limit": limit, "offset": offset})
+    if isinstance(data, dict) and "error" in data:
+        raise HTTPException(400, f"/me/playlists failed: {data}")
+    return data
+
+
+@router.get("/spotify/top-artists", summary="Return user's top artists (requires access_token)", tags=["Spotify"])
+def get_top_artists(
+    access_token: str = Query(..., description="Spotify access token"),
+    limit: int = 10,
+    offset: int = 0
+):
+    data = spotify_get("/me/top/artists", access_token, params={"limit": limit, "offset": offset})
+    if isinstance(data, dict) and "error" in data:
+        raise HTTPException(400, f"/me/top/artists failed: {data}")
+    return data
