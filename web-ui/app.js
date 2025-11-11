@@ -1,151 +1,214 @@
-// ------- CONFIG -------
-const BASE = "http://127.0.0.1:8000";
-document.getElementById("baseShow").textContent = BASE;
+// web-ui/app.js
+// Minimal demo UI to log in via Spotify and generate a Music Passport quickly.
 
-// ------- Elements -------
-const tokenEl = document.getElementById("token");
+const BASE = "http://127.0.0.1:8000"; // Backend base URL
+document.getElementById("baseShow") && (document.getElementById("baseShow").textContent = BASE);
+
+// Elements
 const btnLogin = document.getElementById("btnLogin");
 const btnLogout = document.getElementById("btnLogout");
-const signedInAs = document.getElementById("signedInAs");
-
 const btnMe = document.getElementById("btnMe");
 const meOut = document.getElementById("meOut");
+const tokenEl = document.getElementById("token");
 
 const limitEl = document.getElementById("limit");
 const btnPlaylists = document.getElementById("btnPlaylists");
 const playlistsEl = document.getElementById("playlists");
 
-const btnPassportTop = document.getElementById("btnPassportTop");
-const btnPassportRecent = document.getElementById("btnPassportRecent");
+const btnPassTop = document.getElementById("btnPassTop");
+const btnPassRecent = document.getElementById("btnPassRecent");
 const passOut = document.getElementById("passOut");
-const debugBox = document.getElementById("debugBox");
 
-// ------- Helpers -------
-function setStatus(msg, cls="") {
-  debugBox.textContent = msg || "";
-  debugBox.className = cls || "";
-}
+const signedStatus = document.getElementById("signedStatus");
 
-function enableIfToken() {
-  const hasToken = !!tokenEl.value.trim();
-  [btnMe, btnPlaylists, btnPassportTop, btnPassportRecent, btnLogout].forEach(b => b.disabled = !hasToken);
-  signedInAs.textContent = hasToken ? (signedInAs.textContent || "Signed in") : "Not signed in";
-}
+// ----------------------- helpers -----------------------
 
-function handleError(where, r) {
-  return r.text().then(t => {
-    const msg = `${where} -> HTTP ${r.status} ${t}`;
-    setStatus(msg, "err");
-    throw new Error(msg);
-  });
-}
-
-function renderPassport(json) {
-  const cc = json.country_counts || {};
-  const rp = json.region_percentages || {};
-  const lines = [];
-  lines.push(`Total Artists: ${json.total_artists || 0}\n`);
-  lines.push("Countries:");
-  if (Object.keys(cc).length === 0) lines.push("(none)");
-  else Object.keys(cc).forEach(k => lines.push(`• ${k}: ${cc[k]}`));
-  lines.push("\nRegions:");
-  if (Object.keys(rp).length === 0) lines.push("(none)");
-  else Object.keys(rp).forEach(k => lines.push(`• ${k}: ${Math.round((rp[k] || 0) * 100)}%`));
-  passOut.textContent = lines.join("\n");
-}
-
-// Reads tokens passed by /auth/callback as URL fragment
-(function initFromHash() {
-  const h = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
-  if (!h) { enableIfToken(); return; }
-  const params = {};
-  h.split("&").forEach(kv => {
-    const [k, v] = kv.split("=");
-    if (k) params[decodeURIComponent(k)] = decodeURIComponent(v || "");
-  });
-  if (params.access_token) {
-    tokenEl.value = params.access_token;
-    signedInAs.textContent = params.display_name ? `Signed in as ${params.display_name}` : "Signed in";
-    window.location.hash = ""; // clean URL
-    setStatus("Token loaded from OAuth callback.", "ok");
+function setSignedIn(name) {
+  if (signedStatus) {
+    signedStatus.textContent = name ? `Signed in as ${name}` : "Signed out";
   }
-  enableIfToken();
-})();
+}
 
-tokenEl.addEventListener("input", enableIfToken);
+function getHashParams() {
+  // Parse fragment: #access_token=...&refresh_token=...&app_token=...&display_name=...&spotify_id=...
+  const hash = window.location.hash.startsWith("#") ? window.location.hash.substring(1) : "";
+  const params = new URLSearchParams(hash);
+  return {
+    access_token: params.get("access_token") || "",
+    refresh_token: params.get("refresh_token") || "",
+    app_token: params.get("app_token") || "",
+    display_name: params.get("display_name") || "",
+    spotify_id: params.get("spotify_id") || "",
+  };
+}
 
-// ------- Actions -------
-btnLogin.onclick = () => {
-  setStatus("");
-  window.location.href = `${BASE}/auth/login`;
-};
+function saveTokens(t) {
+  if (!t) return;
+  if (t.access_token) localStorage.setItem("tuniverse_access_token", t.access_token);
+  if (t.refresh_token) localStorage.setItem("tuniverse_refresh_token", t.refresh_token);
+  if (t.app_token) localStorage.setItem("tuniverse_app_token", t.app_token);
+  if (t.display_name) localStorage.setItem("tuniverse_display_name", t.display_name);
+  if (t.spotify_id) localStorage.setItem("tuniverse_spotify_id", t.spotify_id);
+}
 
-btnLogout.onclick = () => {
-  tokenEl.value = "";
-  signedInAs.textContent = "Not signed in";
-  meOut.textContent = "";
-  playlistsEl.innerHTML = "";
-  passOut.textContent = "";
-  setStatus("Logged out.");
-  enableIfToken();
-};
+function loadTokens() {
+  return {
+    access_token: localStorage.getItem("tuniverse_access_token") || "",
+    refresh_token: localStorage.getItem("tuniverse_refresh_token") || "",
+    app_token: localStorage.getItem("tuniverse_app_token") || "",
+    display_name: localStorage.getItem("tuniverse_display_name") || "",
+    spotify_id: localStorage.getItem("tuniverse_spotify_id") || "",
+  };
+}
 
-btnMe.onclick = async () => {
-  meOut.textContent = "Loading profile...";
-  setStatus("");
-  const at = tokenEl.value.trim();
-  const r = await fetch(`${BASE}/spotify/me?access_token=${encodeURIComponent(at)}`);
-  if (!r.ok) return handleError("GET /spotify/me", r);
-  const data = await r.json();
+function clearTokens() {
+  ["tuniverse_access_token","tuniverse_refresh_token","tuniverse_app_token","tuniverse_display_name","tuniverse_spotify_id"]
+    .forEach(k => localStorage.removeItem(k));
+}
+
+function enableBtns(hasToken) {
+  if (btnMe) btnMe.disabled = !hasToken;
+  if (btnPlaylists) btnPlaylists.disabled = !hasToken;
+  if (btnPassTop) btnPassTop.disabled = !hasToken;
+  if (btnPassRecent) btnPassRecent.disabled = !hasToken;
+}
+
+// Render helpers
+function renderProfile(p) {
   const lines = [
-    `ID: ${data.id}`,
-    `Email: ${data.email || "(unknown)"}`,
-    `Name: ${data.display_name || "(unknown)"}`,
-    `Country: ${data.country || "(unknown)"}`,
-    `Product: ${data.product || "(unknown)"}`
+    `ID: ${p.id || "(unknown)"}`,
+    `Email: ${p.email || "(unknown)"}`,
+    `Name: ${p.display_name || "(unknown)"}`,
+    `Country: ${p.country || "(unknown)"}`,
+    `Product: ${p.product || "(unknown)"}`
   ];
   meOut.textContent = lines.join("\n");
-};
+}
 
-btnPlaylists.onclick = async () => {
-  playlistsEl.innerHTML = "<li>Loading playlists...</li>";
-  setStatus("");
-  const at = tokenEl.value.trim();
-  const limit = Number(limitEl.value) || 5;
-  const r = await fetch(`${BASE}/spotify/playlists?access_token=${encodeURIComponent(at)}&limit=${limit}`);
-  if (!r.ok) {
+function renderPassport(data) {
+  // data: { total_artists, country_counts, region_percentages, ... }
+  if (!data || typeof data !== "object") {
+    passOut.textContent = "Error: bad response";
+    return;
+  }
+  const cc = data.country_counts || {};
+  const rp = data.region_percentages || {};
+  let out = `Total Artists: ${data.total_artists || 0}\n\nCountries:\n`;
+  const ccKeys = Object.keys(cc);
+  if (ccKeys.length === 0) out += "(none)\n";
+  else ccKeys.forEach(k => out += `• ${k}: ${cc[k]}\n`);
+  out += `\nRegions:\n`;
+  const rpKeys = Object.keys(rp);
+  if (rpKeys.length === 0) out += "(none)\n";
+  else rpKeys.forEach(k => out += `• ${k}: ${Math.round(rp[k]*100)}%\n`);
+  passOut.textContent = out;
+}
+
+// ----------------------- init from hash or cache -----------------------
+
+(function bootstrap() {
+  // 1) tokens from hash after /auth/callback
+  const h = getHashParams();
+  if (h.access_token) {
+    saveTokens(h);
+    // clear fragment for cleanliness
+    history.replaceState(null, "", window.location.pathname);
+  }
+
+  // 2) populate UI from cache
+  const t = loadTokens();
+  if (tokenEl) tokenEl.value = t.access_token || "";
+  enableBtns(!!t.access_token);
+  setSignedIn(t.display_name || "");
+
+  // If we already have a token, auto-load profile
+  if (t.access_token && btnMe) {
+    btnMe.click();
+  }
+})();
+
+// ----------------------- actions -----------------------
+
+if (btnLogin) {
+  btnLogin.onclick = () => {
+    // Server-side OAuth login; backend will redirect back with tokens in the hash
+    window.location.href = `${BASE}/auth/login`;
+  };
+}
+if (btnLogout) {
+  btnLogout.onclick = () => {
+    clearTokens();
+    if (tokenEl) tokenEl.value = "";
+    enableBtns(false);
+    setSignedIn("");
+    meOut.textContent = "";
     playlistsEl.innerHTML = "";
-    return handleError("GET /spotify/playlists", r);
-  }
-  const data = await r.json();
-  const items = (data.items || []).map(
-    p => `<li><strong>${p.name}</strong> <small>(${p.tracks?.total ?? "?"} tracks)</small></li>`
-  ).join("");
-  playlistsEl.innerHTML = items || "<li>No playlists</li>";
-};
+    passOut.textContent = "";
+  };
+}
 
-btnPassportTop.onclick = async () => {
-  passOut.textContent = "Building passport from Top Artists…";
-  setStatus("");
-  const at = tokenEl.value.trim();
-  const r = await fetch(`${BASE}/passport/from_token?access_token=${encodeURIComponent(at)}&limit=10`);
-  if (!r.ok) return handleError("GET /passport/from_token", r);
-  const data = await r.json();
-  if (!data || (data.total_artists || 0) === 0) {
-    setStatus("Top artists returned 0. Try the Recently Played fallback after playing a couple tracks.", "warn");
-  }
-  renderPassport(data);
-};
+if (btnMe) {
+  btnMe.onclick = async () => {
+    meOut.textContent = "Loading profile...";
+    try {
+      const at = (tokenEl?.value || "").trim();
+      if (!at) throw new Error("No access token");
+      const r = await fetch(`${BASE}/spotify/me?access_token=${encodeURIComponent(at)}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      renderProfile(data);
+    } catch (e) {
+      meOut.textContent = `Error: ${e.message || e}`;
+    }
+  };
+}
 
-btnPassportRecent.onclick = async () => {
-  passOut.textContent = "Building passport from Recently Played…";
-  setStatus("");
-  const at = tokenEl.value.trim();
-  const r = await fetch(`${BASE}/passport/from_recent?access_token=${encodeURIComponent(at)}&limit=20`);
-  if (!r.ok) return handleError("GET /passport/from_recent", r);
-  const data = await r.json();
-  if (!data || (data.total_artists || 0) === 0) {
-    setStatus("No recent plays found. Play a couple tracks, then try again.", "warn");
-  }
-  renderPassport(data);
-};
+if (btnPlaylists) {
+  btnPlaylists.onclick = async () => {
+    playlistsEl.innerHTML = "<li>Loading playlists...</li>";
+    try {
+      const at = (tokenEl?.value || "").trim();
+      if (!at) throw new Error("No access token");
+      const limit = Number(limitEl?.value || 5) || 5;
+      const r = await fetch(`${BASE}/spotify/playlists?access_token=${encodeURIComponent(at)}&limit=${limit}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      const items = (data.items || []).map(p =>
+        `<li><strong>${p.name}</strong> <small>(${(p.tracks && p.tracks.total) ?? "?"} tracks)</small></li>`
+      ).join("");
+      playlistsEl.innerHTML = items || "<li>No playlists</li>";
+    } catch (e) {
+      playlistsEl.innerHTML = `<li>Error: ${e.message || e}</li>`;
+    }
+  };
+}
+
+if (btnPassTop) {
+  btnPassTop.onclick = async () => {
+    passOut.textContent = "Generating...";
+    try {
+      const at = (tokenEl?.value || "").trim();
+      if (!at) throw new Error("No access token");
+      const r = await fetch(`${BASE}/passport/from_token?access_token=${encodeURIComponent(at)}&limit=8`);
+      const data = await r.json();
+      renderPassport(data);
+    } catch (e) {
+      passOut.textContent = `Error: ${e.message || e}`;
+    }
+  };
+}
+
+if (btnPassRecent) {
+  btnPassRecent.onclick = async () => {
+    passOut.textContent = "Generating...";
+    try {
+      const at = (tokenEl?.value || "").trim();
+      if (!at) throw new Error("No access token");
+      const r = await fetch(`${BASE}/passport/from_token_recent?access_token=${encodeURIComponent(at)}&limit=20`);
+      const data = await r.json();
+      renderPassport(data);
+    } catch (e) {
+      passOut.textContent = `Error: ${e.message || e}`;
+    }
+  };
+}
