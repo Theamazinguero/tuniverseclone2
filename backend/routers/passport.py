@@ -11,19 +11,16 @@ Created backend code for the music passport
 """
 
 # backend/routers/passport.py
-# Music Passport endpoints:
-#   GET /passport/{user_id}      -> (your original DB-based summary) optional
-#   GET /passport/from_token     -> live snapshot from Top Artists (no DB write)
-#   GET /passport/from_recent    -> live snapshot from Recently Played (no DB write)
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Dict, Optional, Set
+import os, time, requests
 
 from ..db import get_db
 from .. import crud, models
 from ..schemas import PassportSummaryOut
 
+# If you have a spotify helper:
 try:
     from ..spotify_client import spotify_get
 except Exception:
@@ -31,21 +28,23 @@ except Exception:
 
 router = APIRouter()
 
-# Minimal country -> region mapping (extend as needed)
+# --- Country -> Region map (minimal; extend as needed) ---
 COUNTRY_TO_REGION = {
-    "United States": "North America", "Canada": "North America", "Mexico": "North America",
-    "United Kingdom": "Europe", "Ireland": "Europe", "Germany": "Europe", "France": "Europe",
-    "Spain": "Europe", "Italy": "Europe", "Netherlands": "Europe", "Sweden": "Europe",
-    "Norway": "Europe", "Finland": "Europe", "Denmark": "Europe", "Poland": "Europe",
-    "Portugal": "Europe", "Russia": "Europe",
-    "Japan": "Asia", "South Korea": "Asia", "China": "Asia", "India": "Asia",
+    "United States": "North America", "USA": "North America", "U.S.": "North America",
+    "Canada": "North America", "Mexico": "North America",
+    "United Kingdom": "Europe", "UK": "Europe", "Ireland": "Europe", "Germany": "Europe",
+    "France": "Europe", "Spain": "Europe", "Italy": "Europe", "Netherlands": "Europe",
+    "Sweden": "Europe", "Norway": "Europe", "Finland": "Europe", "Denmark": "Europe",
+    "Poland": "Europe", "Portugal": "Europe", "Russia": "Europe",
+    "Japan": "Asia", "South Korea": "Asia", "Korea, Republic of": "Asia", "China": "Asia", "India": "Asia",
     "Australia": "Oceania", "New Zealand": "Oceania",
     "Brazil": "South America", "Argentina": "South America", "Chile": "South America", "Colombia": "South America",
     "South Africa": "Africa", "Nigeria": "Africa", "Egypt": "Africa",
 }
-
 def region_of(country: Optional[str]) -> Optional[str]:
-    return COUNTRY_TO_REGION.get(country) if country else None
+    if not country:
+        return None
+    return COUNTRY_TO_REGION.get(country)
 
 def rollup_regions(country_counts: Dict[str, int]) -> Dict[str, float]:
     total = sum(country_counts.values())
@@ -57,8 +56,31 @@ def rollup_regions(country_counts: Dict[str, int]) -> Dict[str, float]:
         reg_counts[reg] = reg_counts.get(reg, 0) + cnt
     return {reg: cnt / total for reg, cnt in reg_counts.items()}
 
+# Best-effort MusicBrainz country lookup (safe fallback = "Unknown")
+def mb_lookup_country(artist_name: str) -> Optional[str]:
+    try:
+        url = "https://musicbrainz.org/ws/2/artist"
+        params = {"query": f'artist:"{artist_name}"', "limit": 1, "fmt": "json"}
+        headers = {"User-Agent": "TuniverseDemo/1.0 (class project)"}
+        r = requests.get(url, params=params, headers=headers, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        if data.get("artists"):
+            a = data["artists"][0]
+            if "country" in a and a["country"]:
+                return a["country"]
+            for key in ("area", "begin-area"):
+                if isinstance(a.get(key), dict):
+                    nm = a[key].get("name")
+                    if nm:
+                        return nm
+    except Exception:
+        return None
+    finally:
+        time.sleep(0.5)  # gentle on MB
+    return None
 
-# ---------------- Existing DB-based endpoint (leave as-is if you use it) ----------------
+# ------------------- DB-based passport (your original) -------------------
 @router.get("/{user_id}", response_model=PassportSummaryOut)
 def get_passport(user_id: str, db: Session = Depends(get_db)):
     tracks = (
@@ -67,20 +89,18 @@ def get_passport(user_id: str, db: Session = Depends(get_db)):
           .filter(models.Playlist.user_id == user_id)
           .all()
     )
-
-    artist_ids = set()
+    artist_ids: Set[str] = set()
     for t in tracks:
         for aid in (t.artist_ids or []):
             artist_ids.add(aid)
 
+    artists = []
     if artist_ids:
         artists = (
             db.query(models.Artist)
               .filter(models.Artist.spotify_artist_id.in_(list(artist_ids)))
               .all()
         )
-    else:
-        artists = []
 
     country_counts: Dict[str, int] = {}
     for a in artists:
@@ -89,64 +109,79 @@ def get_passport(user_id: str, db: Session = Depends(get_db)):
 
     total = len(artists)
     region_percentages = rollup_regions(country_counts)
-
     passport = crud.create_passport(db, user_id, country_counts, region_percentages, total)
     return passport
 
-
-# ---------------- Live from Top Artists (no DB write) ----------------
+# ------------------- Live: from Top Artists -------------------
 @router.get("/from_token")
 def passport_from_token(
-    access_token: str = Query(...),
-    limit: int = Query(12, ge=1, le=50),
+    access_token: str = Query(..., description="Spotify access token"),
+    limit: int = Query(10, ge=1, le=50),
 ):
     top = spotify_get("/me/top/artists", access_token, params={"limit": limit})
     if not isinstance(top, dict) or "items" not in top:
-        return {"user_id": "from_token", "total_artists": 0, "country_counts": {}, "region_percentages": {}}
+        raise HTTPException(400, detail=f"Could not fetch top artists: {top}")
 
-    # Simple: count artists; country is Unknown for demo speed
-    total_artists = 0
+    items = top.get("items", [])
+    total_artists = len(items)
     country_counts: Dict[str, int] = {}
-    for artist in top.get("items", []):
-        if not artist:
-            continue
-        total_artists += 1
-        country_counts["Unknown"] = country_counts.get("Unknown", 0) + 1
 
+    for artist in items:
+        name = artist.get("name")
+        if not name:
+            continue
+        country = mb_lookup_country(name) or "Unknown"
+        country_counts[country] = country_counts.get(country, 0) + 1
+
+    # Guarantee non-empty totals if items exist
+    if total_artists > 0 and sum(country_counts.values()) == 0:
+        country_counts["Unknown"] = total_artists
+
+    region_percentages = rollup_regions(country_counts)
     return {
-        "user_id": "from_token",
-        "total_artists": total_artists,
+        "id": "from_token",
+        "user_id": "spotify_user",
+        "created_at": None,
         "country_counts": country_counts,
-        "region_percentages": rollup_regions(country_counts),
+        "region_percentages": region_percentages,
+        "total_artists": total_artists,
     }
 
-
-# ---------------- Live from Recently Played (fallback) ----------------
+# ------------------- Live: from Recently Played (fallback) -------------------
 @router.get("/from_recent")
 def passport_from_recent(
-    access_token: str = Query(...),
-    limit: int = Query(50, ge=1, le=50),
+    access_token: str = Query(..., description="Spotify access token"),
+    limit: int = Query(20, ge=1, le=50),
 ):
-    rec = spotify_get("/me/player/recently-played", access_token, params={"limit": limit})
-    if not isinstance(rec, dict) or "items" not in rec:
-        return {"user_id": "from_recent", "total_artists": 0, "country_counts": {}, "region_percentages": {}}
+    recent = spotify_get("/me/player/recently-played", access_token, params={"limit": limit})
+    if not isinstance(recent, dict) or "items" not in recent:
+        raise HTTPException(400, detail=f"Could not fetch recently played: {recent}")
 
-    unique_artist_ids: Set[str] = set()
-    for item in rec.get("items", []):
-        track = (item or {}).get("track") or {}
-        for a in track.get("artists") or []:
-            if a and a.get("id"):
-                unique_artist_ids.add(a["id"])
+    items = recent.get("items", [])
+    # Collect unique artist names from recent plays
+    names: Set[str] = set()
+    for it in items:
+        track = (it or {}).get("track") or {}
+        for a in (track.get("artists") or []):
+            if a.get("name"):
+                names.add(a["name"])
 
-    total_artists = len(unique_artist_ids)
+    total_artists = len(names)
     country_counts: Dict[str, int] = {}
-    for _ in unique_artist_ids:
-        country_counts["Unknown"] = country_counts.get("Unknown", 0) + 1
+    for name in names:
+        country = mb_lookup_country(name) or "Unknown"
+        country_counts[country] = country_counts.get(country, 0) + 1
 
+    if total_artists > 0 and sum(country_counts.values()) == 0:
+        country_counts["Unknown"] = total_artists
+
+    region_percentages = rollup_regions(country_counts)
     return {
-        "user_id": "from_recent",
-        "total_artists": total_artists,
+        "id": "from_recent",
+        "user_id": "spotify_user",
+        "created_at": None,
         "country_counts": country_counts,
-        "region_percentages": rollup_regions(country_counts),
+        "region_percentages": region_percentages,
+        "total_artists": total_artists,
     }
 
