@@ -21,13 +21,24 @@ Usage:
 """
 
 # backend/spotify_auth.py
+"""
+Spotify OAuth + simple Spotify passthrough endpoints used by the web UI.
+- GET  /auth/login         -> redirect to Spotify
+- GET  /auth/callback      -> exchange code, redirect to FRONTEND_URL with tokens in hash
+- GET  /spotify/me         -> profile via Spotify API (requires access_token)
+- GET  /spotify/playlists  -> playlists via Spotify API (requires access_token)
+- GET  /spotify/top-artists-> top artists via Spotify API (requires access_token)
+"""
+
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from typing import Optional
-import os, urllib.parse, base64, requests
+import os
+import urllib.parse
+import base64
+import requests
 
 from .auth import create_access_token
-from .spotify_client import spotify_get, refresh_spotify_token
 
 router = APIRouter()
 
@@ -44,7 +55,7 @@ def _basic_auth_header() -> str:
     raw = f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}".encode()
     return "Basic " + base64.b64encode(raw).decode()
 
-@router.get("/auth/login")
+@router.get("/auth/login", summary="Redirect to Spotify login", tags=["Auth"])
 def spotify_login(state: Optional[str] = None):
     if not SPOTIFY_CLIENT_ID or not SPOTIFY_REDIRECT_URI:
         raise HTTPException(500, "Spotify env vars not configured")
@@ -59,7 +70,7 @@ def spotify_login(state: Optional[str] = None):
     }
     return RedirectResponse(AUTHORIZE_URL + "?" + urllib.parse.urlencode(params))
 
-@router.get("/auth/callback")
+@router.get("/auth/callback", summary="Spotify callback → exchange code → redirect to web UI", tags=["Auth"])
 def spotify_callback(code: Optional[str] = Query(None), error: Optional[str] = Query(None), state: Optional[str] = Query(None)):
     if error or not code:
         raise HTTPException(400, f"Spotify auth error: {error or 'missing code'}")
@@ -77,7 +88,7 @@ def spotify_callback(code: Optional[str] = Query(None), error: Optional[str] = Q
     access_token = tokens["access_token"]
     refresh_token = tokens.get("refresh_token", "")
 
-    me = spotify_get("/me", access_token)
+    me = _sp_get("/me", access_token)
     if isinstance(me, dict) and "error" in me:
         raise HTTPException(400, f"/me failed: {me}")
 
@@ -92,23 +103,34 @@ def spotify_callback(code: Optional[str] = Query(None), error: Optional[str] = Q
     })
     return RedirectResponse(f"{target}#{fragment}")
 
-@router.get("/spotify/me")
+# ---- passthroughs used by the web UI ----
+
+def _sp_get(path: str, access_token: str, params: Optional[dict] = None):
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = f"https://api.spotify.com/v1{path}"
+    r = requests.get(url, headers=headers, params=params or {}, timeout=10)
+    try:
+        return r.json()
+    except Exception:
+        return {"error": f"http {r.status_code}", "text": r.text}
+
+@router.get("/spotify/me", tags=["Spotify"])
 def get_me(access_token: str = Query(...)):
-    data = spotify_get("/me", access_token)
+    data = _sp_get("/me", access_token)
     if isinstance(data, dict) and "error" in data:
         raise HTTPException(400, f"/me failed: {data}")
     return data
 
-@router.get("/spotify/playlists")
+@router.get("/spotify/playlists", tags=["Spotify"])
 def get_playlists(access_token: str = Query(...), limit: int = 10, offset: int = 0):
-    data = spotify_get("/me/playlists", access_token, params={"limit": limit, "offset": offset})
+    data = _sp_get("/me/playlists", access_token, params={"limit": limit, "offset": offset})
     if isinstance(data, dict) and "error" in data:
         raise HTTPException(400, f"/me/playlists failed: {data}")
     return data
 
-@router.get("/spotify/top-artists")
+@router.get("/spotify/top-artists", tags=["Spotify"])
 def get_top_artists(access_token: str = Query(...), limit: int = 10, offset: int = 0):
-    data = spotify_get("/me/top/artists", access_token, params={"limit": limit, "offset": offset})
+    data = _sp_get("/me/top/artists", access_token, params={"limit": limit, "offset": offset})
     if isinstance(data, dict) and "error" in data:
         raise HTTPException(400, f"/me/top/artists failed: {data}")
     return data
