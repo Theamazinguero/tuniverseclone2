@@ -1,7 +1,5 @@
 // -------- CONFIG --------
-const BASE = (window.LOCAL_BACKEND && typeof window.LOCAL_BACKEND === 'string')
-  ? window.LOCAL_BACKEND
-  : "http://127.0.0.1:8000";
+const BASE = "http://127.0.0.1:8000";
 document.getElementById("baseShow").textContent = BASE;
 
 // -------- El refs --------
@@ -17,8 +15,8 @@ const limitEl    = document.getElementById("limit");
 const btnPlay    = document.getElementById("btnPlaylists");
 const listEl     = document.getElementById("playlists");
 
-const btnPassTop   = document.getElementById("btnPassportTop");
-const btnPassRec   = document.getElementById("btnPassportRecent");
+const btnPassTop = document.getElementById("btnPassportTop");
+const btnPassRec = document.getElementById("btnPassportRecent");
 const passOut    = document.getElementById("passOut");
 
 // -------- Token helpers --------
@@ -40,7 +38,6 @@ function loadTokens() {
     localStorage.setItem("app_token", hash.app_token || "");
     localStorage.setItem("display_name", hash.display_name || "");
     localStorage.setItem("spotify_id", hash.spotify_id || "");
-    // Clear hash so refreshes don't look messy
     history.replaceState({}, document.title, window.location.pathname);
   }
   const at = localStorage.getItem("spotify_access_token") || "";
@@ -56,7 +53,7 @@ function requireToken() {
   return at;
 }
 
-// -------- Wire actions --------
+// -------- Actions --------
 btnLogin.onclick = () => {
   window.location.href = `${BASE}/auth/login`;
 };
@@ -87,7 +84,7 @@ btnMe.onclick = async () => {
       `Email: ${data.email || "(unknown)"}`,
       `Name: ${data.display_name || "(unknown)"}`,
       `Country: ${data.country || "(unknown)"}`,
-      `Product: ${data.product || "(unknown)"}`,
+      `Product: ${data.product || "(unknown)"}`
     ];
     meOut.textContent = lines.join("\n");
   } catch (e) {
@@ -123,16 +120,9 @@ async function buildPassport(path) {
     }
     const data = await r.json();
 
-    // Prefer new unified response shape
     const cc = data.country_counts || {};
     const rp = data.region_percentages || {};
     const total = data.total_artists ?? 0;
-
-    // Fallback: top-artists raw (if any)
-    if (!Object.keys(cc).length && Array.isArray(data.items)) {
-      passOut.textContent = `No country data. Top artists returned (${data.items.length}) but without country mapping.`;
-      return;
-    }
 
     let out = `Total Artists: ${total}\n\nCountries:\n`;
     Object.keys(cc).sort().forEach(k => out += `• ${k}: ${cc[k]}\n`);
@@ -147,6 +137,6 @@ async function buildPassport(path) {
 btnPassTop.onclick = () => buildPassport(`/passport/from_token`);
 btnPassRec.onclick = () => buildPassport(`/passport/from_token_recent`);
 
-// -------- Init --------
+// Init
 loadTokens();
 
