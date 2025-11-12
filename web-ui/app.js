@@ -145,7 +145,8 @@ async function buildPassport(path) {
 }
 
 btnPassTop.onclick = () => buildPassport(`/passport/from_token`);
-btnPassRec.onclick = () => buildPassport(`/passport/from_recent`);
+btnPassRec.onclick = () => buildPassport(`/passport/from_token_recent`);
 
 // -------- Init --------
 loadTokens();
+
