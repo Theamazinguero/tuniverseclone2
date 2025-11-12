@@ -9,6 +9,7 @@ Change Log:
 Version 1.0 (10/03/2025):
 Created main to run backend code
 """
+# backend/main.py
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,25 +24,29 @@ except Exception:
 from backend.routers import users, playlists, artists, passport, compare
 from backend.routers import demo_passport
 from backend import spotify_auth
-# Optional community router — leave commented out if not present
-# from backend.routers import community
+# from backend.routers import community  # leave commented until passport is stable
 
-app = FastAPI(title="Tuniverse Backend")
+app = FastAPI(title="Tuniverse Backend", version="0.1.0")
 
+# CORS: explicitly allow your web server origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # demo-friendly
+    allow_origins=[
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include routers
 app.include_router(users.router, prefix="/users", tags=["Users"])
 app.include_router(playlists.router, prefix="/playlists", tags=["Playlists"])
 app.include_router(artists.router, prefix="/artists", tags=["Artists"])
-# IMPORTANT: do NOT add a prefix here; the passport router already has /passport
-app.include_router(passport.router)   # <- FIXED
+
+# IMPORTANT: router already has prefix="/passport", so we include it without another prefix
+app.include_router(passport.router)
+
 app.include_router(compare.router, prefix="/compare", tags=["Comparisons"])
 app.include_router(demo_passport.router, tags=["Demo"])
 app.include_router(spotify_auth.router, tags=["Auth"])
@@ -50,4 +55,3 @@ app.include_router(spotify_auth.router, tags=["Auth"])
 @app.get("/")
 def root():
     return {"message": "Tuniverse backend running"}
-
