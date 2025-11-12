@@ -1,214 +1,151 @@
-// web-ui/app.js
-// Minimal demo UI to log in via Spotify and generate a Music Passport quickly.
+// -------- CONFIG --------
+const BASE = (window.LOCAL_BACKEND && typeof window.LOCAL_BACKEND === 'string')
+  ? window.LOCAL_BACKEND
+  : "http://127.0.0.1:8000";
+document.getElementById("baseShow").textContent = BASE;
 
-const BASE = "http://127.0.0.1:8000"; // Backend base URL
-document.getElementById("baseShow") && (document.getElementById("baseShow").textContent = BASE);
+// -------- El refs --------
+const signedAs   = document.getElementById("signedAs");
+const tokenEl    = document.getElementById("token");
+const btnLogin   = document.getElementById("btnLogin");
+const btnLogout  = document.getElementById("btnLogout");
 
-// Elements
-const btnLogin = document.getElementById("btnLogin");
-const btnLogout = document.getElementById("btnLogout");
-const btnMe = document.getElementById("btnMe");
-const meOut = document.getElementById("meOut");
-const tokenEl = document.getElementById("token");
+const btnMe      = document.getElementById("btnMe");
+const meOut      = document.getElementById("meOut");
 
-const limitEl = document.getElementById("limit");
-const btnPlaylists = document.getElementById("btnPlaylists");
-const playlistsEl = document.getElementById("playlists");
+const limitEl    = document.getElementById("limit");
+const btnPlay    = document.getElementById("btnPlaylists");
+const listEl     = document.getElementById("playlists");
 
-const btnPassTop = document.getElementById("btnPassTop");
-const btnPassRecent = document.getElementById("btnPassRecent");
-const passOut = document.getElementById("passOut");
+const btnPassTop   = document.getElementById("btnPassportTop");
+const btnPassRec   = document.getElementById("btnPassportRecent");
+const passOut    = document.getElementById("passOut");
 
-const signedStatus = document.getElementById("signedStatus");
-
-// ----------------------- helpers -----------------------
-
-function setSignedIn(name) {
-  if (signedStatus) {
-    signedStatus.textContent = name ? `Signed in as ${name}` : "Signed out";
-  }
-}
-
-function getHashParams() {
-  // Parse fragment: #access_token=...&refresh_token=...&app_token=...&display_name=...&spotify_id=...
-  const hash = window.location.hash.startsWith("#") ? window.location.hash.substring(1) : "";
-  const params = new URLSearchParams(hash);
-  return {
-    access_token: params.get("access_token") || "",
-    refresh_token: params.get("refresh_token") || "",
-    app_token: params.get("app_token") || "",
-    display_name: params.get("display_name") || "",
-    spotify_id: params.get("spotify_id") || "",
-  };
-}
-
-function saveTokens(t) {
-  if (!t) return;
-  if (t.access_token) localStorage.setItem("tuniverse_access_token", t.access_token);
-  if (t.refresh_token) localStorage.setItem("tuniverse_refresh_token", t.refresh_token);
-  if (t.app_token) localStorage.setItem("tuniverse_app_token", t.app_token);
-  if (t.display_name) localStorage.setItem("tuniverse_display_name", t.display_name);
-  if (t.spotify_id) localStorage.setItem("tuniverse_spotify_id", t.spotify_id);
+// -------- Token helpers --------
+function readHashParams() {
+  const h = (window.location.hash || "").replace(/^#/, "");
+  const out = {};
+  h.split("&").forEach(kv => {
+    const [k, v] = kv.split("=");
+    if (k) out[decodeURIComponent(k)] = decodeURIComponent(v || "");
+  });
+  return out;
 }
 
 function loadTokens() {
-  return {
-    access_token: localStorage.getItem("tuniverse_access_token") || "",
-    refresh_token: localStorage.getItem("tuniverse_refresh_token") || "",
-    app_token: localStorage.getItem("tuniverse_app_token") || "",
-    display_name: localStorage.getItem("tuniverse_display_name") || "",
-    spotify_id: localStorage.getItem("tuniverse_spotify_id") || "",
-  };
-}
-
-function clearTokens() {
-  ["tuniverse_access_token","tuniverse_refresh_token","tuniverse_app_token","tuniverse_display_name","tuniverse_spotify_id"]
-    .forEach(k => localStorage.removeItem(k));
-}
-
-function enableBtns(hasToken) {
-  if (btnMe) btnMe.disabled = !hasToken;
-  if (btnPlaylists) btnPlaylists.disabled = !hasToken;
-  if (btnPassTop) btnPassTop.disabled = !hasToken;
-  if (btnPassRecent) btnPassRecent.disabled = !hasToken;
-}
-
-// Render helpers
-function renderProfile(p) {
-  const lines = [
-    `ID: ${p.id || "(unknown)"}`,
-    `Email: ${p.email || "(unknown)"}`,
-    `Name: ${p.display_name || "(unknown)"}`,
-    `Country: ${p.country || "(unknown)"}`,
-    `Product: ${p.product || "(unknown)"}`
-  ];
-  meOut.textContent = lines.join("\n");
-}
-
-function renderPassport(data) {
-  // data: { total_artists, country_counts, region_percentages, ... }
-  if (!data || typeof data !== "object") {
-    passOut.textContent = "Error: bad response";
-    return;
+  const hash = readHashParams();
+  if (hash.access_token) {
+    localStorage.setItem("spotify_access_token", hash.access_token);
+    localStorage.setItem("spotify_refresh_token", hash.refresh_token || "");
+    localStorage.setItem("app_token", hash.app_token || "");
+    localStorage.setItem("display_name", hash.display_name || "");
+    localStorage.setItem("spotify_id", hash.spotify_id || "");
+    // Clear hash so refreshes don't look messy
+    history.replaceState({}, document.title, window.location.pathname);
   }
-  const cc = data.country_counts || {};
-  const rp = data.region_percentages || {};
-  let out = `Total Artists: ${data.total_artists || 0}\n\nCountries:\n`;
-  const ccKeys = Object.keys(cc);
-  if (ccKeys.length === 0) out += "(none)\n";
-  else ccKeys.forEach(k => out += `• ${k}: ${cc[k]}\n`);
-  out += `\nRegions:\n`;
-  const rpKeys = Object.keys(rp);
-  if (rpKeys.length === 0) out += "(none)\n";
-  else rpKeys.forEach(k => out += `• ${k}: ${Math.round(rp[k]*100)}%\n`);
-  passOut.textContent = out;
+  const at = localStorage.getItem("spotify_access_token") || "";
+  tokenEl.value = at;
+  const name = localStorage.getItem("display_name") || "";
+  signedAs.textContent = at ? `Signed in as ${name || "Spotify user"}` : "Not signed in";
+  signedAs.className = "pill " + (at ? "ok" : "err");
 }
 
-// ----------------------- init from hash or cache -----------------------
+function requireToken() {
+  const at = tokenEl.value.trim();
+  if (!at) throw new Error("No access token. Click 'Login with Spotify' first.");
+  return at;
+}
 
-(function bootstrap() {
-  // 1) tokens from hash after /auth/callback
-  const h = getHashParams();
-  if (h.access_token) {
-    saveTokens(h);
-    // clear fragment for cleanliness
-    history.replaceState(null, "", window.location.pathname);
+// -------- Wire actions --------
+btnLogin.onclick = () => {
+  window.location.href = `${BASE}/auth/login`;
+};
+
+btnLogout.onclick = () => {
+  localStorage.removeItem("spotify_access_token");
+  localStorage.removeItem("spotify_refresh_token");
+  localStorage.removeItem("app_token");
+  localStorage.removeItem("display_name");
+  localStorage.removeItem("spotify_id");
+  tokenEl.value = "";
+  signedAs.textContent = "Not signed in";
+  signedAs.className = "pill err";
+  meOut.textContent = "";
+  listEl.innerHTML = "";
+  passOut.textContent = "";
+};
+
+btnMe.onclick = async () => {
+  meOut.textContent = "Loading profile…";
+  try {
+    const at = requireToken();
+    const r = await fetch(`${BASE}/spotify/me?access_token=${encodeURIComponent(at)}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const lines = [
+      `ID: ${data.id}`,
+      `Email: ${data.email || "(unknown)"}`,
+      `Name: ${data.display_name || "(unknown)"}`,
+      `Country: ${data.country || "(unknown)"}`,
+      `Product: ${data.product || "(unknown)"}`,
+    ];
+    meOut.textContent = lines.join("\n");
+  } catch (e) {
+    meOut.textContent = `Error: ${e.message || e}`;
   }
+};
 
-  // 2) populate UI from cache
-  const t = loadTokens();
-  if (tokenEl) tokenEl.value = t.access_token || "";
-  enableBtns(!!t.access_token);
-  setSignedIn(t.display_name || "");
-
-  // If we already have a token, auto-load profile
-  if (t.access_token && btnMe) {
-    btnMe.click();
+btnPlay.onclick = async () => {
+  listEl.innerHTML = "<li>Loading…</li>";
+  try {
+    const at = requireToken();
+    const limit = Number(limitEl.value) || 5;
+    const r = await fetch(`${BASE}/spotify/playlists?access_token=${encodeURIComponent(at)}&limit=${limit}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const items = (data.items || []).map(p =>
+      `<li><strong>${p.name}</strong> <small>(${p.tracks?.total ?? "?"} tracks)</small></li>`
+    ).join("");
+    listEl.innerHTML = items || "<li>No playlists</li>";
+  } catch (e) {
+    listEl.innerHTML = `<li class="err">Error: ${e.message || e}</li>`;
   }
-})();
+};
 
-// ----------------------- actions -----------------------
-
-if (btnLogin) {
-  btnLogin.onclick = () => {
-    // Server-side OAuth login; backend will redirect back with tokens in the hash
-    window.location.href = `${BASE}/auth/login`;
-  };
-}
-if (btnLogout) {
-  btnLogout.onclick = () => {
-    clearTokens();
-    if (tokenEl) tokenEl.value = "";
-    enableBtns(false);
-    setSignedIn("");
-    meOut.textContent = "";
-    playlistsEl.innerHTML = "";
-    passOut.textContent = "";
-  };
-}
-
-if (btnMe) {
-  btnMe.onclick = async () => {
-    meOut.textContent = "Loading profile...";
-    try {
-      const at = (tokenEl?.value || "").trim();
-      if (!at) throw new Error("No access token");
-      const r = await fetch(`${BASE}/spotify/me?access_token=${encodeURIComponent(at)}`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.json();
-      renderProfile(data);
-    } catch (e) {
-      meOut.textContent = `Error: ${e.message || e}`;
+async function buildPassport(path) {
+  passOut.textContent = "Generating passport…";
+  try {
+    const at = requireToken();
+    const r = await fetch(`${BASE}${path}?access_token=${encodeURIComponent(at)}`);
+    if (!r.ok) {
+      const txt = await r.text();
+      throw new Error(`HTTP ${r.status}: ${txt}`);
     }
-  };
+    const data = await r.json();
+
+    // Prefer new unified response shape
+    const cc = data.country_counts || {};
+    const rp = data.region_percentages || {};
+    const total = data.total_artists ?? 0;
+
+    // Fallback: top-artists raw (if any)
+    if (!Object.keys(cc).length && Array.isArray(data.items)) {
+      passOut.textContent = `No country data. Top artists returned (${data.items.length}) but without country mapping.`;
+      return;
+    }
+
+    let out = `Total Artists: ${total}\n\nCountries:\n`;
+    Object.keys(cc).sort().forEach(k => out += `• ${k}: ${cc[k]}\n`);
+    out += `\nRegions:\n`;
+    Object.keys(rp).forEach(k => out += `• ${k}: ${Math.round((rp[k] || 0) * 100)}%\n`);
+    passOut.textContent = out;
+  } catch (e) {
+    passOut.textContent = `Error: ${e.message || e}`;
+  }
 }
 
-if (btnPlaylists) {
-  btnPlaylists.onclick = async () => {
-    playlistsEl.innerHTML = "<li>Loading playlists...</li>";
-    try {
-      const at = (tokenEl?.value || "").trim();
-      if (!at) throw new Error("No access token");
-      const limit = Number(limitEl?.value || 5) || 5;
-      const r = await fetch(`${BASE}/spotify/playlists?access_token=${encodeURIComponent(at)}&limit=${limit}`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.json();
-      const items = (data.items || []).map(p =>
-        `<li><strong>${p.name}</strong> <small>(${(p.tracks && p.tracks.total) ?? "?"} tracks)</small></li>`
-      ).join("");
-      playlistsEl.innerHTML = items || "<li>No playlists</li>";
-    } catch (e) {
-      playlistsEl.innerHTML = `<li>Error: ${e.message || e}</li>`;
-    }
-  };
-}
+btnPassTop.onclick = () => buildPassport(`/passport/from_token`);
+btnPassRec.onclick = () => buildPassport(`/passport/from_recent`);
 
-if (btnPassTop) {
-  btnPassTop.onclick = async () => {
-    passOut.textContent = "Generating...";
-    try {
-      const at = (tokenEl?.value || "").trim();
-      if (!at) throw new Error("No access token");
-      const r = await fetch(`${BASE}/passport/from_token?access_token=${encodeURIComponent(at)}&limit=8`);
-      const data = await r.json();
-      renderPassport(data);
-    } catch (e) {
-      passOut.textContent = `Error: ${e.message || e}`;
-    }
-  };
-}
-
-if (btnPassRecent) {
-  btnPassRecent.onclick = async () => {
-    passOut.textContent = "Generating...";
-    try {
-      const at = (tokenEl?.value || "").trim();
-      if (!at) throw new Error("No access token");
-      const r = await fetch(`${BASE}/passport/from_token_recent?access_token=${encodeURIComponent(at)}&limit=20`);
-      const data = await r.json();
-      renderPassport(data);
-    } catch (e) {
-      passOut.textContent = `Error: ${e.message || e}`;
-    }
-  };
-}
+// -------- Init --------
+loadTokens();
