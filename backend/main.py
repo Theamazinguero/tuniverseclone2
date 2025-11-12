@@ -9,8 +9,6 @@ Change Log:
 Version 1.0 (10/03/2025):
 Created main to run backend code
 """
-
-
 # backend/main.py
 from pathlib import Path
 from fastapi import FastAPI
@@ -25,7 +23,6 @@ except Exception:
 
 from backend.routers import users, playlists, artists, passport, compare
 from backend.routers import demo_passport
-from backend.routers import community  # optional if you added community sharing
 from backend import spotify_auth
 
 app = FastAPI(title="Tuniverse Backend")
@@ -38,6 +35,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Keep community OUT for now
 app.include_router(users.router, prefix="/users", tags=["Users"])
 app.include_router(playlists.router, prefix="/playlists", tags=["Playlists"])
 app.include_router(artists.router, prefix="/artists", tags=["Artists"])
@@ -45,9 +43,10 @@ app.include_router(passport.router, prefix="/passport", tags=["Music Passport"])
 app.include_router(compare.router, prefix="/compare", tags=["Comparisons"])
 app.include_router(demo_passport.router, tags=["Demo"])
 app.include_router(spotify_auth.router, tags=["Auth"])
-app.include_router(community.router, prefix="/community", tags=["Community"])  # if present
 
 @app.get("/")
 def root():
     return {"message": "Tuniverse backend running"}
+
+
 
