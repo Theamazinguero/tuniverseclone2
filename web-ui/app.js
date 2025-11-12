@@ -1,7 +1,7 @@
 // -------- CONFIG --------
 const BASE = "http://127.0.0.1:8000";
-const baseShowEl = document.getElementById("baseShow");
-if (baseShowEl) baseShowEl.textContent = BASE;
+const baseShow = document.getElementById("baseShow");
+if (baseShow) baseShow.textContent = BASE;
 
 // -------- El refs --------
 const signedAs   = document.getElementById("signedAs");
@@ -40,15 +40,15 @@ function loadTokens() {
     localStorage.setItem("app_token", hash.app_token || "");
     localStorage.setItem("display_name", hash.display_name || "");
     localStorage.setItem("spotify_id", hash.spotify_id || "");
-    // Clean the URL
     history.replaceState({}, document.title, window.location.pathname);
   }
-
   const at = localStorage.getItem("spotify_access_token") || "";
   tokenEl.value = at;
   const name = localStorage.getItem("display_name") || "";
-  signedAs.textContent = at ? `Signed in as ${name || "Spotify user"}` : "Not signed in";
-  signedAs.className = "pill " + (at ? "ok" : "err");
+  if (signedAs) {
+    signedAs.textContent = at ? `Signed in as ${name || "Spotify user"}` : "Not signed in";
+    signedAs.className = "pill " + (at ? "ok" : "err");
+  }
 }
 
 function requireToken() {
@@ -69,19 +69,19 @@ btnLogout.onclick = () => {
   localStorage.removeItem("display_name");
   localStorage.removeItem("spotify_id");
   tokenEl.value = "";
-  signedAs.textContent = "Not signed in";
-  signedAs.className = "pill err";
-  meOut.textContent = "";
-  listEl.innerHTML = "";
-  passOut.textContent = "";
+  if (signedAs) { signedAs.textContent = "Not signed in"; signedAs.className = "pill err"; }
+  if (meOut) meOut.textContent = "";
+  if (listEl) listEl.innerHTML = "";
+  if (passOut) passOut.textContent = "";
 };
 
 btnMe.onclick = async () => {
   meOut.textContent = "Loading profile…";
   try {
     const at = requireToken();
-    const r = await fetch(`${BASE}/spotify/me?access_token=${encodeURIComponent(at)}`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const url = `${BASE}/spotify/me?access_token=${encodeURIComponent(at)}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
     const data = await r.json();
     const lines = [
       `ID: ${data.id}`,
@@ -101,8 +101,10 @@ btnPlay.onclick = async () => {
   try {
     const at = requireToken();
     const limit = Number(limitEl.value) || 5;
-    const r = await fetch(`${BASE}/spotify/playlists?access_token=${encodeURIComponent(at)}&limit=${limit}`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const url = `${BASE}/spotify/playlists?access_token=${encodeURIComponent(at)}&limit=${limit}`;
+    console.log("GET", url);
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
     const data = await r.json();
     const items = (data.items || []).map(p =>
       `<li><strong>${p.name}</strong> <small>(${p.tracks?.total ?? "?"} tracks)</small></li>`
@@ -117,21 +119,15 @@ async function buildPassport(path) {
   passOut.textContent = "Generating passport…";
   try {
     const at = requireToken();
-    const r = await fetch(`${BASE}${path}?access_token=${encodeURIComponent(at)}`);
-    if (!r.ok) {
-      const txt = await r.text();
-      throw new Error(`HTTP ${r.status}: ${txt}`);
-    }
+    const url = `${BASE}${path}?access_token=${encodeURIComponent(at)}`;
+    console.log("GET", url);
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
     const data = await r.json();
 
     const cc = data.country_counts || {};
     const rp = data.region_percentages || {};
     const total = data.total_artists ?? 0;
-
-    if (!Object.keys(cc).length && total === 0) {
-      passOut.textContent = "No country data available yet for your account.";
-      return;
-    }
 
     let out = `Total Artists: ${total}\n\nCountries:\n`;
     Object.keys(cc).sort().forEach(k => out += `• ${k}: ${cc[k]}\n`);
@@ -143,11 +139,8 @@ async function buildPassport(path) {
   }
 }
 
-// IMPORTANT: Must match backend routes exactly
-btnPassTop.onclick  = () => buildPassport(`/passport/from_token`);
-btnPassRec.onclick  = () => buildPassport(`/passport/from_recent`);
+btnPassTop.onclick = () => buildPassport(`/passport/from_token`);
+btnPassRec.onclick = () => buildPassport(`/passport/from_token_recent`);
 
 // Init
 loadTokens();
-
-
